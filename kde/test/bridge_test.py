@@ -78,7 +78,9 @@ class FakeConsole(http.server.BaseHTTPRequestHandler):
         if path == "cameras":
             return self.send_json(200, [{"id": "cam1", "name": "Front ", "state": "CONNECTED", "lcdMessage": {}},
                                         {"id": "cam2", "name": "Back Door", "state": "CONNECTED"},
-                                        {"id": "cam3", "name": "Garage", "state": "DISCONNECTED"}], policy)
+                                        {"id": "cam3", "name": "Garage", "state": "DISCONNECTED"}]
+                                  + [{"id": "cam%d" % n, "name": "Camera %d" % n, "state": "CONNECTED"}
+                                     for n in range(4, 4 + int(os.environ.get("FAKE_EXTRA_CAMERAS", "0")))], policy)
         if path.startswith("cameras/") and path.endswith("/snapshot"):
             FakeConsole.snapshots += 1
             self.send_response(200)

@@ -272,35 +272,39 @@ PlasmaExtras.Representation {
         PlasmaComponents.ScrollView {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.leftMargin: Kirigami.Units.smallSpacing
-            Layout.rightMargin: Kirigami.Units.smallSpacing
             visible: root.focusedCamera === "" && popup.tab === "cameras"
             QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
 
-            GridView {
-                id: grid
-                readonly property int columns: width > Kirigami.Units.gridUnit * 40 ? 3 : 2
-                model: root.cameras
+            // A plain Grid with an explicit column count: GridView fits columns to its width itself,
+            // and in some popup sizes and scales it fit one fewer than the cells were sized for.
+            Flickable {
+                id: gridFlick
                 clip: true
-                flickableDirection: Flickable.VerticalFlick
                 boundsBehavior: Flickable.StopAtBounds
-                // No side margins: GridView fits columns to its full width, so margins would leave
-                // room for one fewer. Each cell pads its tile instead.
-                topMargin: Kirigami.Units.smallSpacing
-                bottomMargin: Kirigami.Units.smallSpacing
-                cellWidth: Math.floor(width / columns)
-                cellHeight: Math.floor((cellWidth - Kirigami.Units.smallSpacing * 2) * 9 / 16) + Kirigami.Units.smallSpacing * 2
-                delegate: Item {
-                    required property var modelData
-                    width: grid.cellWidth
-                    height: grid.cellHeight
-                    CameraTile {
-                        anchors.fill: parent
-                        anchors.margins: Kirigami.Units.smallSpacing
-                        camera: parent.modelData
-                        tick: popup.gridTick
-                        active: popup.gridShown
-                        onClicked: root.focusedCamera = parent.modelData.id
+                flickableDirection: Flickable.VerticalFlick
+                contentWidth: width
+                contentHeight: tiles.implicitHeight + Kirigami.Units.smallSpacing * 2
+
+                Grid {
+                    id: tiles
+                    x: Kirigami.Units.smallSpacing
+                    y: Kirigami.Units.smallSpacing
+                    width: gridFlick.width - Kirigami.Units.smallSpacing * 2
+                    columns: gridFlick.width > Kirigami.Units.gridUnit * 40 ? 3 : 2
+                    spacing: Kirigami.Units.smallSpacing * 2
+                    readonly property real cell: Math.floor((width - spacing * (columns - 1)) / columns)
+
+                    Repeater {
+                        model: root.cameras
+                        delegate: CameraTile {
+                            required property var modelData
+                            width: tiles.cell
+                            height: Math.round(width * 9 / 16)
+                            camera: modelData
+                            tick: popup.gridTick
+                            active: popup.gridShown
+                            onClicked: root.focusedCamera = modelData.id
+                        }
                     }
                 }
             }
