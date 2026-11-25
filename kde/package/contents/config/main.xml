@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0 http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="General">
+    <!-- color (UniFi blue) | monochrome -->
+    <entry name="iconColor" type="String"><default>monochrome</default></entry>
+    <!-- badge | dot | none -->
+    <entry name="badgeStyle" type="String"><default>badge</default></entry>
+    <!-- Seconds between grid snapshots while the popup is open (minimum 2) -->
+    <entry name="gridRefresh" type="Int"><default>5</default></entry>
+    <entry name="showMotionInList" type="Bool"><default>false</default></entry>
+    <!-- cameras | events -->
+    <entry name="popupTab" type="String"><default>cameras</default></entry>
+  </group>
+  <group name="Console">
+    <!-- The API key itself is in the Secret Service -->
+    <entry name="host" type="String"><default></default></entry>
+    <!-- {"https://host": "AB:CD:…"}: trusted self-signed certificate fingerprints -->
+    <entry name="pinnedFingerprints" type="String"><default>{}</default></entry>
+  </group>
+  <group name="Notifications">
+    <entry name="notificationsEnabled" type="Bool"><default>true</default></entry>
+    <entry name="notifyKinds" type="String"><default>ring,person,vehicle,package,audioAlarm,sensor</default></entry>
+    <!-- Camera ids, comma-separated -->
+    <entry name="mutedCameras" type="String"><default></default></entry>
+    <!-- Seconds before the same camera and kind notifies again -->
+    <entry name="cooldown" type="Int"><default>60</default></entry>
+    <!-- popover | web -->
+    <entry name="notificationClick" type="String"><default>popover</default></entry>
+    <!-- Epoch milliseconds; 0 when not paused -->
+    <entry name="snoozedUntil" type="Double"><default>0</default></entry>
+    <entry name="lastSeen" type="Double"><default>0</default></entry>
+  </group>
+  <group name="Cache">
+    <!-- For the settings pages, which can't see the widget's state. No secrets. -->
+    <!-- [{"id", "name", "isDoorbell"}] -->
+    <entry name="cameraList" type="String"><default>[]</default></entry>
+    <!-- {"host", "error": {kind, detail, fingerprint}, "live", "name", "version", "cameras", "offline", "events", "source"} -->
+    <entry name="consoleStatus" type="String"><default>{}</default></entry>
+    <!-- Bumped by the General page to ask the widget to clear the event log -->
+    <entry name="requestClearLog" type="Int"><default>0</default></entry>
+  </group>
+</kcfg>

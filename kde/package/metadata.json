@@ -1,0 +1,18 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Travis Thompson"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "UniFi Protect cameras and events: a snapshot grid, a near-live view, an event log and notifications",
+        "Icon": "camera-video",
+        "Id": "dev.protectcameras.plasmoid",
+        "License": "MIT",
+        "Name": "Protect Cameras",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

@@ -1,13 +1,20 @@
 # Protect Cameras
 
-Your UniFi Protect cameras and events in the macOS menu bar: a snapshot grid of every camera, a near-live view of any one of them, a log of detections and doorbell rings, and macOS notifications with the snapshot attached.
+Your UniFi Protect cameras and events at a glance: a snapshot grid of every camera, a near-live view of any one of them, a log of detections and doorbell rings, and notifications with the snapshot attached. It comes in two versions with the same features and design:
+
+- **macOS**: a menu bar app (Swift, in `Sources/`).
+- **KDE Plasma 6 on Linux**: a panel or system tray widget that also works on the desktop (QML, in [`kde/`](kde/README.md)). See [KDE Plasma](#kde-plasma).
 
 ![Menu bar styles, light](docs/menubar-light.png)
 ![Menu bar styles, dark](docs/menubar-dark.png)
 
 ## Install
 
-Requires macOS 14+, the Xcode Command Line Tools (`xcode-select --install`), and UniFi Protect 5.3 or later (for the Integration API).
+Both versions need UniFi Protect 5.3 or later (for the Integration API).
+
+### macOS
+
+Requires macOS 14+ and the Xcode Command Line Tools (`xcode-select --install`).
 
 ```sh
 make install      # builds "Protect Cameras.app", copies it to ~/Applications, launches it
@@ -15,7 +22,17 @@ make install      # builds "Protect Cameras.app", copies it to ~/Applications, l
 
 `make app` builds into `build/` without installing. Opening the app again (Spotlight, Finder) brings up Settings, which helps when a menu bar manager has hidden the item.
 
-## Setting it up
+### KDE Plasma (Linux)
+
+Requires Plasma 6, `python3` and `secret-tool` (in `libsecret`).
+
+```sh
+make kde-install  # installs the widget for your user with kpackagetool6
+```
+
+Then right-click a panel or the desktop → **Add Widgets…** → **Protect Cameras**. More in [KDE Plasma](#kde-plasma) below.
+
+## Setting it up on macOS
 
 1. In Protect, go to **Settings → Control Plane → Integrations** and create an API key.
 2. In the app's **Settings → Console**, enter the console's address and paste the key. Click **Connect**.
@@ -49,6 +66,18 @@ Settings → Notifications picks what's worth a banner:
 - **"Live" means about one frame per second.** The view is built from snapshots. Real video would need an RTSP player, which macOS doesn't include. Use **Open in Protect** for full video and playback.
 - **Thumbnails are snapshots taken when the event arrives**, not Protect's own event thumbnails (the Integration API doesn't offer those), so they can be a moment late.
 
+## KDE Plasma
+
+The Plasma widget is a port of the macOS app: the same camera grid, live view, event log, badge styles and notification rules, drawn with Plasma's own theme.
+
+- **In a panel or the system tray**: the camera glyph with a count or dot for new events. **Click** for the popup, **middle-click** to refresh, **right-click** for Refresh Now, Open Protect in Browser, Pause Notifications, Send Test Notification and Configure.
+- **On the desktop**: the popup itself. Resize and move it like any Plasma widget.
+- **Settings** (right-click → Configure): General, Console and Notifications, the same options as the macOS app.
+
+Setting it up works the same way (an API key, and a one-time check of a self-signed certificate's fingerprint, which the popup offers when it sees one), except that the key goes into your keyring (KWallet or GNOME Keyring) with `secret-tool`: Configure → Console shows the command to run in a terminal, which prompts for the key so it never appears in shell history or a process listing. A small Python helper that ships with the widget does the networking QML can't (certificate pinning, the websockets, snapshots).
+
+Desktop notifications go through Plasma's notification system. After upgrading, restart Plasma to load the new version (`systemctl --user restart plasma-plasmashell`). `make kde-uninstall` removes it. Details are in [`kde/README.md`](kde/README.md).
+
 ## Terminal
 
 ```sh
@@ -75,6 +104,8 @@ PROTECT_CAMERAS_DEBUG=1 "build/Protect Cameras.app/Contents/MacOS/ProtectCameras
 | `SystemNotifier.swift` | macOS notifications with snapshot attachments |
 | `Logo.swift` | Camera glyph, menu bar renderer, app icon |
 | `StatusItemController.swift`, `PopoverView.swift`, `SettingsView.swift` | UI |
+
+The KDE widget lives in `kde/package` (a standard Plasma applet package). Its event, notification and camera logic in `kde/package/contents/code/protect.js` mirrors `Models.swift` and `ProtectStore.swift`, and its helper `protect-bridge.py` mirrors `ProtectAPI.swift`, so a change to one usually needs the same change in the other. `make kde-test` runs its tests. [`kde/README.md`](kde/README.md) has the file map.
 
 ## License
 
