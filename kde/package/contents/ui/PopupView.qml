@@ -272,6 +272,8 @@ PlasmaExtras.Representation {
         PlasmaComponents.ScrollView {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.leftMargin: Kirigami.Units.smallSpacing
+            Layout.rightMargin: Kirigami.Units.smallSpacing
             visible: root.focusedCamera === "" && popup.tab === "cameras"
             QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
 
@@ -282,11 +284,11 @@ PlasmaExtras.Representation {
                 clip: true
                 flickableDirection: Flickable.VerticalFlick
                 boundsBehavior: Flickable.StopAtBounds
-                leftMargin: Kirigami.Units.smallSpacing * 2
-                rightMargin: Kirigami.Units.smallSpacing * 2
-                topMargin: Kirigami.Units.smallSpacing * 2
-                bottomMargin: Kirigami.Units.smallSpacing * 2
-                cellWidth: Math.floor((width - leftMargin - rightMargin) / columns)
+                // No side margins: GridView fits columns to its full width, so margins would leave
+                // room for one fewer. Each cell pads its tile instead.
+                topMargin: Kirigami.Units.smallSpacing
+                bottomMargin: Kirigami.Units.smallSpacing
+                cellWidth: Math.floor(width / columns)
                 cellHeight: Math.floor((cellWidth - Kirigami.Units.smallSpacing * 2) * 9 / 16) + Kirigami.Units.smallSpacing * 2
                 delegate: Item {
                     required property var modelData

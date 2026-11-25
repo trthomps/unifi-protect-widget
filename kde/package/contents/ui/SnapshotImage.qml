@@ -102,7 +102,7 @@ Rectangle {
         spacing: Kirigami.Units.smallSpacing
         Kirigami.Icon {
             visible: snap.offline || snap.failed
-            source: snap.offline ? "camera-off" : "dialog-warning"
+            source: snap.offline ? "camera-off-symbolic" : "dialog-warning"
             color: "white"
             isMask: true
             opacity: 0.8

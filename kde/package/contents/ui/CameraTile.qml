@@ -14,7 +14,8 @@ Item {
     required property var camera
     property int tick: 0
     property bool active: true
-    readonly property string activeKind: P.activeKind(root.events, camera.id, root.now, Plasmoid.configuration.showMotionInList)
+    /// The most urgent detection in progress, or "" (a string property turns null into "").
+    readonly property string activeKind: P.activeKind(root.events, camera.id, root.now, Plasmoid.configuration.showMotionInList) || ""
     readonly property bool muted: root.mutedCameras.indexOf(camera.id) >= 0
     readonly property bool connected: P.isConnected(camera)
 
@@ -81,7 +82,7 @@ Item {
     }
 
     Rectangle {
-        visible: tile.activeKind !== null
+        visible: tile.activeKind !== ""
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.margins: Kirigami.Units.smallSpacing
@@ -103,8 +104,8 @@ Item {
         anchors.fill: parent
         color: "transparent"
         radius: Kirigami.Units.cornerRadius
-        border.width: tile.activeKind !== null ? 2 : 1
-        border.color: tile.activeKind !== null ? Kirigami.Theme.negativeTextColor
+        border.width: tile.activeKind !== "" ? 2 : 1
+        border.color: tile.activeKind !== "" ? Kirigami.Theme.negativeTextColor
             : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b,
                       mouse.containsMouse ? 0.35 : 0.1)
     }

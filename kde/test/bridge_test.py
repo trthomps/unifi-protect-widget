@@ -76,8 +76,10 @@ class FakeConsole(http.server.BaseHTTPRequestHandler):
         if path == "nvrs":
             return self.send_json(200, {"name": "Test NVR"}, policy)
         if path == "cameras":
-            return self.send_json(200, [{"id": "cam1", "name": "Front ", "state": "CONNECTED", "lcdMessage": {}}], policy)
-        if path == "cameras/cam1/snapshot":
+            return self.send_json(200, [{"id": "cam1", "name": "Front ", "state": "CONNECTED", "lcdMessage": {}},
+                                        {"id": "cam2", "name": "Back Door", "state": "CONNECTED"},
+                                        {"id": "cam3", "name": "Garage", "state": "DISCONNECTED"}], policy)
+        if path.startswith("cameras/") and path.endswith("/snapshot"):
             FakeConsole.snapshots += 1
             self.send_response(200)
             self.send_header("Content-Type", "image/jpeg")
