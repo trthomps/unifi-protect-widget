@@ -176,6 +176,8 @@ PlasmoidItem {
                 pollSeq = 0
                 pollVersion = -1
                 bridgeGen = -1
+                // It doesn't know the console yet (a no-op if a refresh is what started it).
+                Qt.callLater(() => refresh(false))
             }
             bridge = info
             bridgeStarting = null
@@ -519,7 +521,7 @@ PlasmoidItem {
 
     function clearLog() {
         events = []
-        pruneThumbnails()
+        call("POST", "/prune", {}, { keep: [], all: true }).catch(() => {})
         saveNow()
     }
 

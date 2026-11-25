@@ -34,7 +34,8 @@ PlasmaExtras.Representation {
         running: popup.gridShown
         onTriggered: popup.gridTick += 1
     }
-    onGridShownChanged: if (gridShown) gridTick += 1
+    // On the desktop the popup never closes, so leaving the event list is what marks events seen.
+    onTabChanged: if (root.planar && tab !== "events") root.markSeen()
 
     Keys.onEscapePressed: event => {
         if (root.focusedCamera !== "") { root.focusedCamera = ""; event.accepted = true }

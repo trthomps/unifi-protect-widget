@@ -147,8 +147,15 @@ def main():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     console = "https://127.0.0.1:%d" % server.server_address[1]
 
+    # A stand-in secret-tool: prints the key, or fails like a locked keyring while `locked` exists.
+    bindir = os.path.join(tmp, "bin")
+    os.makedirs(bindir)
+    with open(os.path.join(bindir, "secret-tool"), "w") as fh:
+        fh.write('#!/bin/sh\n[ -e "%s/locked" ] && { echo "Cannot unlock" >&2; exit 5; }\nprintf %%s "%s"\n' % (tmp, KEY))
+    os.chmod(os.path.join(bindir, "secret-tool"), 0o755)
     env = dict(os.environ, XDG_RUNTIME_DIR=os.path.join(tmp, "run"), XDG_DATA_HOME=os.path.join(tmp, "data"),
-               PROTECT_CAMERAS_HOST=console, PROTECT_CAMERAS_API_KEY=KEY)
+               PROTECT_CAMERAS_HOST=console, PROTECT_CAMERAS_API_KEY=KEY,
+               PATH=bindir + os.pathsep + os.environ.get("PATH", ""))
     os.makedirs(env["XDG_RUNTIME_DIR"], mode=0o700)
     if os.environ.get("PROTECT_CAMERAS_DEBUG"):
         print("logs in", env["XDG_RUNTIME_DIR"])
@@ -245,8 +252,14 @@ def main():
         assert FakeConsole.snapshots == before
         r2 = call("POST", "/thumbnail", {"event": "../../evil", "camera": "cam1"})
         assert os.path.basename(r2["path"]) == "evil.jpg" and os.path.dirname(r2["path"]) == os.path.dirname(r["path"])
+        # Just saved: kept even though it isn't listed (its event may not be marked yet).
+        assert call("POST", "/prune", body={"keep": []})["removed"] == 0
+        old = time.time() - 600
+        os.utime(r2["path"], (old, old))
         assert call("POST", "/prune", body={"keep": ["66f0aa"]})["removed"] == 1
         assert os.path.exists(r["path"]) and not os.path.exists(r2["path"])
+        assert call("POST", "/prune", body={"keep": [], "all": True})["removed"] == 1
+        assert not os.path.exists(r["path"])
         assert call("GET", "/log") == []
         assert call("PUT", "/log", body=[{"id": "x"}])["ok"]
         assert call("GET", "/log") == [{"id": "x"}]
@@ -263,6 +276,22 @@ def main():
             seq, version = r["seq"], r["version"]
             live = r["states"]["events"]["state"] == "open" and any(m["channel"] == "events" for m in r["messages"])
         assert live
+        checks += 1
+
+        # A console set in Settings reads its key from the keyring.
+        r = call("POST", "/config", body={"host": console, "pin": fp})
+        assert "error" not in r, r
+        gen = r["gen"]
+        assert call("GET", "/api", {"path": "cameras"})["body"][0]["id"] == "cam1"
+        # A keyring that fails for a moment keeps the working connection.
+        open(os.path.join(tmp, "locked"), "w").close()
+        r = call("POST", "/config", body={"host": console, "pin": fp})
+        assert r["gen"] == gen and not r["changed"] and "error" not in r, r
+        assert call("GET", "/api", {"path": "cameras"})["body"][0]["id"] == "cam1"
+        # But not for a different console.
+        r = call("POST", "/config", body={"host": "https://127.0.0.2:1", "pin": None})
+        assert r["error"]["kind"] == "keyring" and r["error"]["detail"] == "Cannot unlock", r
+        os.remove(os.path.join(tmp, "locked"))
         checks += 1
 
         # Starting again finds the running bridge.

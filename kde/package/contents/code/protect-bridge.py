@@ -639,7 +639,7 @@ API_PATHS = {"meta/info", "nvrs", "cameras"}
 
 def safe_name(event_id):
     """Event ids are hex; anything else is reduced to safe characters so it can't escape the folder."""
-    safe = "".join(c for c in str(event_id) if c.isalnum() or c == "-")[:100]
+    safe = "".join(c for c in str(event_id) if (c.isascii() and c.isalnum()) or c == "-")[:100]
     return safe or "invalid"
 
 
@@ -695,6 +695,13 @@ class Bridge:
             error = exc
         if not error and not (host and key):
             error = ProtectError("notConfigured")
+        with self.lock:
+            # A keyring that's briefly locked or slow shouldn't drop a working connection: keep
+            # using the key we already have for the same console.
+            if error and error.kind == "keyring" and self.console is not None \
+                    and self.key_signature and self.key_signature[:2] == (host, pin or None):
+                log("keyring lookup failed, keeping the current connection: %s" % error)
+                return {"gen": self.gen, "changed": False, "host": self.host, "source": self.source}
         signature = (host, pin or None, hashlib.sha256(key.encode()).hexdigest() if key else None)
         with self.lock:
             changed = signature != self.key_signature
@@ -798,14 +805,24 @@ class Bridge:
         atomic_write(path, data)
         return path
 
-    def prune(self, keep):
+    def prune(self, keep, everything=False):
+        """Deletes thumbnails of events no longer in `keep`, except ones saved in the last two
+        minutes (an event the widget hasn't marked yet), unless `everything` (clearing the log)."""
         keep = {safe_name(k) + ".jpg" for k in keep}
         removed = 0
         try:
             names = os.listdir(self.thumb_dir)
         except FileNotFoundError:
             return 0
+        recent = time.time() - 120
         for name in names:
+            path = os.path.join(self.thumb_dir, name)
+            try:
+                # One being saved for an event the widget hasn't marked yet.
+                if not everything and os.path.getmtime(path) > recent:
+                    continue
+            except OSError:
+                continue
             if name not in keep:
                 try:
                     os.remove(os.path.join(self.thumb_dir, name))
@@ -860,6 +877,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def body(self):
         length = int(self.headers.get("Content-Length") or 0)
         if length > 16 * 1024 * 1024:
+            self.close_connection = True    # the unread body would be parsed as the next request
             raise ProtectError("http", "Too large.", 413)
         return self.rfile.read(length) if length else b""
 
@@ -891,8 +909,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if route == ("POST", "/thumbnail"):
                 return self.reply(200, {"path": b.save_thumbnail(query.get("event", ""), query.get("camera", ""))})
             if route == ("POST", "/prune"):
-                keep = json.loads(self.body() or b"{}").get("keep") or []
-                return self.reply(200, {"removed": b.prune(keep)})
+                req = json.loads(self.body() or b"{}")
+                return self.reply(200, {"removed": b.prune(req.get("keep") or [], bool(req.get("all")))})
             if route == ("GET", "/log"):
                 return self.reply(200, b.read_log())
             if route == ("PUT", "/log"):
