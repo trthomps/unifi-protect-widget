@@ -196,7 +196,10 @@ enum SnoozeOption: String, CaseIterable, Identifiable {
         case .oneHour: return now.addingTimeInterval(3600)
         case .fourHours: return now.addingTimeInterval(4 * 3600)
         case .tomorrow:
+            // The next 7 AM: this morning if it's still before then (paused after midnight).
             let calendar = Calendar.current
+            let today = calendar.date(bySettingHour: 7, minute: 0, second: 0, of: now) ?? now
+            if today > now { return today }
             let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))!
             return calendar.date(bySettingHour: 7, minute: 0, second: 0, of: tomorrow) ?? tomorrow
         }

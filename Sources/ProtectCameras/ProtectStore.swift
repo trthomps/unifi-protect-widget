@@ -39,6 +39,7 @@ final class ProtectStore: ObservableObject {
     private var eventsSocket: ProtectSocket?
     private var devicesSocket: ProtectSocket?
     private var generation = 0
+    private var refreshingGeneration: Int?
     private var pollTimer: Timer?
     private var clockTimer: Timer?
     private var gridTimer: Timer?
@@ -47,7 +48,7 @@ final class ProtectStore: ObservableObject {
     private var wakeObserver: NSObjectProtocol?
     private let pathMonitor = NWPathMonitor()
     private var wasOnline = true
-    private var inFlightSnapshots: Set<String> = []
+    private var inFlightSnapshots: [String: Task<Data?, Never>] = [:]
     private var lastNotified: [String: Date] = [:]
     private var saveWork: DispatchWorkItem?
 
@@ -168,20 +169,29 @@ final class ProtectStore: ObservableObject {
         Task { await refresh(userInitiated: true) }
     }
 
+    /// After wake or a network change an "open" socket may be half-open, so replace it anyway.
     private func reconnectSoon() {
         guard connection != nil else { return }
         Task { await refresh() }
-        eventsSocket?.reconnectNow()
-        devicesSocket?.reconnectNow()
+        eventsSocket?.reconnectNow(force: true)
+        devicesSocket?.reconnectNow(force: true)
     }
 
     // MARK: - Fetching
 
     func refresh(userInitiated: Bool = false) async {
-        guard let connection, !isRefreshing else { return }
-        isRefreshing = true
+        // A refresh still running for a previous console doesn't block one for the new one.
+        guard let connection, refreshingGeneration != generation else { return }
         let started = generation
-        defer { isRefreshing = false; now = Date() }
+        refreshingGeneration = started
+        isRefreshing = true
+        defer {
+            if refreshingGeneration == started {
+                refreshingGeneration = nil
+                isRefreshing = false
+            }
+            now = Date()
+        }
         let api = ProtectAPI(connection: connection)
         do {
             if console == nil || userInitiated {
@@ -268,11 +278,21 @@ final class ProtectStore: ObservableObject {
         }
     }
 
+    /// Fetches a snapshot, or joins the fetch already running for that camera, so an event's
+    /// thumbnail isn't lost to the grid or focus feed holding the slot.
     @discardableResult
     func fetchSnapshot(_ cameraID: String, highQuality: Bool) async -> Data? {
-        guard let connection, !inFlightSnapshots.contains(cameraID) else { return nil }
-        inFlightSnapshots.insert(cameraID)
-        defer { inFlightSnapshots.remove(cameraID) }
+        if let running = inFlightSnapshots[cameraID] { return await running.value }
+        guard connection != nil else { return nil }
+        let task = Task { await self.loadSnapshot(cameraID, highQuality: highQuality) }
+        inFlightSnapshots[cameraID] = task
+        let data = await task.value
+        if inFlightSnapshots[cameraID] == task { inFlightSnapshots[cameraID] = nil }
+        return data
+    }
+
+    private func loadSnapshot(_ cameraID: String, highQuality: Bool) async -> Data? {
+        guard let connection else { return nil }
         let started = generation
         let highQuality = highQuality && camera(cameraID)?.supportsFullHDSnapshot == true
         do {
@@ -357,7 +377,8 @@ final class ProtectStore: ObservableObject {
             smartDetectTypes: item["smartDetectTypes"] as? [String] ?? [],
             cameraName: camera(cameraID)?.name
         )
-        events.insert(event, at: 0)
+        // Newest first; an event picked up from a late update may be older than the top one.
+        events.insert(event, at: events.firstIndex { $0.start < start } ?? events.endIndex)
         prune()
         recountUnseen()
         scheduleSave()
@@ -372,9 +393,7 @@ final class ProtectStore: ObservableObject {
         guard listed || notify else { return }
 
         if !event.hasThumbnail, let cameraID = event.cameraID, Date().timeIntervalSince(event.start) < 60 {
-            var data = await fetchSnapshot(cameraID, highQuality: false)
-            if data == nil { data = await retrySnapshot(cameraID) }
-            if let data {
+            if let data = await fetchSnapshot(cameraID, highQuality: false) {
                 if Self.saveThumbnail(data, for: id), let index = events.firstIndex(where: { $0.id == id }) {
                     events[index].hasThumbnail = true
                     scheduleSave()
@@ -388,12 +407,6 @@ final class ProtectStore: ObservableObject {
         scheduleSave()
         SystemNotifier.post(current, thumbnail: current.hasThumbnail ? Self.thumbnailURL(id) : nil,
                             sound: current.primaryKind == .ring ? Prefs.ringSound : false)
-    }
-
-    /// A snapshot was already being fetched for this camera; wait for it rather than skip.
-    private func retrySnapshot(_ cameraID: String) async -> Data? {
-        try? await Task.sleep(for: .milliseconds(400))
-        return await fetchSnapshot(cameraID, highQuality: false)
     }
 
     func shouldNotify(_ event: ProtectEvent) -> Bool {
@@ -434,6 +447,11 @@ final class ProtectStore: ObservableObject {
     }
 
     func preferencesChanged() {
+        if let timer = gridTimer, abs(timer.timeInterval - Prefs.gridRefresh) > 0.1 {
+            timer.invalidate()
+            gridTimer = nil
+            updateFeeds()
+        }
         recountUnseen()
         objectWillChange.send()
     }
@@ -481,7 +499,11 @@ final class ProtectStore: ObservableObject {
 
     static var logURL: URL { supportDir.appendingPathComponent("events.json") }
     static var thumbnailDir: URL { supportDir.appendingPathComponent("thumbnails", isDirectory: true) }
-    static func thumbnailURL(_ id: String) -> URL { thumbnailDir.appendingPathComponent("\(id).jpg") }
+    /// Event ids are UUIDs; anything else is reduced to safe characters so it can't escape the folder.
+    static func thumbnailURL(_ id: String) -> URL {
+        let safe = String(id.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || $0 == "-" }.map(Character.init))
+        return thumbnailDir.appendingPathComponent("\(safe.isEmpty ? "invalid" : safe).jpg")
+    }
 
     private static func saveThumbnail(_ data: Data, for id: String) -> Bool {
         guard !CLI.isRendering else { return false }

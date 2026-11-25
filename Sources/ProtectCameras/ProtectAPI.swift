@@ -38,16 +38,22 @@ final class TrustDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate,
         // A certificate macOS trusts (Let's Encrypt on a hostname, say) is always fine, so
         // renewals never trip the pin. The pin only vouches for a self-signed one.
         if SecTrustEvaluateWithError(trust, nil) {
+            clearObserved()
             completion(.performDefaultHandling, nil)
             return
         }
         let fingerprint = Self.fingerprint(of: trust)
         if let pinned, let fingerprint, pinned == fingerprint {
+            clearObserved()
             completion(.useCredential, URLCredential(trust: trust))
             return
         }
         lock.lock(); _observed = fingerprint; lock.unlock()
         completion(.cancelAuthenticationChallenge, nil)
+    }
+
+    private func clearObserved() {
+        lock.lock(); _observed = nil; lock.unlock()
     }
 
     /// Colon-separated uppercase SHA-256 of the leaf certificate, as browsers show it.
@@ -136,10 +142,14 @@ final class ProtectConnection: @unchecked Sendable {
     /// Turns a transport failure into something the UI can explain, including certificate
     /// problems the delegate refused.
     func mapError(_ error: Error) -> ProtectError {
-        if let observed = trust.observed {
-            return trust.pinned == nil ? .untrustedCertificate(observed) : .certificateChanged(observed)
-        }
         if let urlError = error as? URLError {
+            // Only a TLS-shaped failure is blamed on the certificate the delegate refused.
+            let tlsCodes: Set<URLError.Code> = [.cancelled, .secureConnectionFailed, .serverCertificateUntrusted,
+                                                .serverCertificateHasUnknownRoot, .serverCertificateHasBadDate,
+                                                .serverCertificateNotYetValid, .clientCertificateRejected]
+            if tlsCodes.contains(urlError.code), let observed = trust.observed {
+                return trust.pinned == nil ? .untrustedCertificate(observed) : .certificateChanged(observed)
+            }
             switch urlError.code {
             case .serverCertificateUntrusted, .serverCertificateHasBadDate, .serverCertificateHasUnknownRoot,
                  .serverCertificateNotYetValid, .secureConnectionFailed:
@@ -285,10 +295,11 @@ final class ProtectSocket {
         set(.idle, nil)
     }
 
-    /// Skip the backoff wait, e.g. after wake or when the network comes back.
-    func reconnectNow() {
+    /// Skip the backoff wait, e.g. after wake or when the network comes back. `force` replaces
+    /// even a socket that looks open, since it may be half-open after sleep or a network switch.
+    func reconnectNow(force: Bool = false) {
         guard loop != nil else { return start() }
-        if case .open = state { return }
+        if case .open = state, !force { return }
         loop?.cancel()
         task?.cancel(with: .goingAway, reason: nil)
         failures = 0
@@ -322,10 +333,17 @@ final class ProtectSocket {
                 opened = true
                 failures = 0
                 set(.open, nil)
+                // Keepalive and dead-connection check: a ping that fails or isn't answered in
+                // 10 seconds cancels the task, so receive() throws and we reconnect.
                 let pinger = Task { [weak task] in
                     while !Task.isCancelled {
-                        try? await Task.sleep(for: .seconds(25))
-                        task?.sendPing { _ in }
+                        try? await Task.sleep(for: .seconds(15))
+                        guard let task, !Task.isCancelled else { return }
+                        if let error = await Self.handshake(task, timeout: 10), !(error is CancellationError) {
+                            Debug.log("socket \(url.lastPathComponent) ping failed: \(error.localizedDescription)")
+                            task.cancel(with: .abnormalClosure, reason: nil)
+                            return
+                        }
                     }
                 }
                 do {

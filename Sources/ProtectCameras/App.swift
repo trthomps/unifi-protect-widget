@@ -18,6 +18,9 @@ enum ProtectCamerasApp {
               ProtectCameras --snapshot NAME FILE   save a camera's snapshot as JPEG
               ProtectCameras --render-icon DIR      render an .iconset for the app icon
               ProtectCameras --render-previews DIR  render menu bar icon PNGs
+              ProtectCameras --render-popover FILE [--tab events] [--camera NAME]
+                                                    render the popover with live data to a PNG
+                                                    (development aid; shows your camera images)
 
             Uses the console and API key saved in the app's Settings.
             """)
@@ -76,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             refresh: { [weak self] in
                 guard let self else { return }
                 Task { await self.store.refresh(userInitiated: true) }
-                self.store.refreshSnapshots(highQuality: false)
+                if self.store.popoverVisible { self.store.refreshSnapshots(highQuality: false) }
             },
             openWeb: { [weak self] url in
                 if let url = url ?? self?.store.webURL { NSWorkspace.shared.open(url) }
