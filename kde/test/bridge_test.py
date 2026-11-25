@@ -188,6 +188,8 @@ def main():
     try:
         assert call("GET", "/health", token="wrong")["error"]["kind"] == "forbidden"
         assert call("GET", "/health")["version"]
+        # A malformed request gets an error reply, not a dropped connection.
+        assert call("POST", "/config", body=[])["error"]["status"] == 400
         checks += 1
 
         # Uses PROTECT_CAMERAS_HOST/API_KEY when no console is configured.

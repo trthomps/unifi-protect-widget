@@ -117,11 +117,11 @@ ColumnLayout {
         visible: detail.recent.length > 0
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        model: detail.recent
+        model: EventListModel { events: detail.recent }
         delegate: EventRow {
-            required property var modelData
+            required property string json
             width: ListView.view.width
-            event: modelData
+            event: JSON.parse(json)
             showCamera: false
             onClicked: {}
         }

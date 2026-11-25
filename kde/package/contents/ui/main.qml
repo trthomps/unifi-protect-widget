@@ -307,7 +307,9 @@ PlasmoidItem {
                 return call("GET", "/api", { path: "cameras" })
             }).then(r => {
                 if (!r || started !== generation) return
-                cameras = P.parseCameras(r.body)
+                // Same list: keep the array, so the grid doesn't rebuild its tiles (and their snapshots).
+                const fetched = P.parseCameras(r.body)
+                if (JSON.stringify(fetched) !== JSON.stringify(cameras)) cameras = fetched
                 if (events.some(e => e.cameraID && !e.cameraName && camera(e.cameraID)))
                     events = events.map(e => e.cameraID && !e.cameraName && camera(e.cameraID)
                         ? Object.assign({}, e, { cameraName: cameraName(e.cameraID) }) : e)

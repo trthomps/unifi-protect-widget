@@ -318,14 +318,14 @@ PlasmaExtras.Representation {
 
             ListView {
                 id: eventList
-                model: root.visibleEvents
+                model: EventListModel { events: root.visibleEvents }
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 delegate: EventRow {
-                    required property var modelData
+                    required property string json
                     width: ListView.view.width
-                    event: modelData
-                    onClicked: if (modelData.cameraID) root.focusedCamera = modelData.cameraID
+                    event: JSON.parse(json)
+                    onClicked: if (event.cameraID) root.focusedCamera = event.cameraID
                 }
 
                 PlasmaExtras.PlaceholderMessage {

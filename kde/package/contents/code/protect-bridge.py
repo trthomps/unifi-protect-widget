@@ -932,6 +932,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.reply(200, {"gen": b.gen, "error": exc.to_json()})
         except (ValueError, OSError) as exc:
             return self.reply(200, {"gen": b.gen, "error": {"kind": "network", "detail": str(exc)}})
+        except Exception as exc:  # noqa: BLE001 - a bad request mustn't look like the helper died
+            log("request failed: %r" % exc)
+            return self.reply(200, {"gen": b.gen, "error": {"kind": "http", "status": 400, "detail": str(exc)}})
 
     def do_GET(self):
         self.route("GET")
